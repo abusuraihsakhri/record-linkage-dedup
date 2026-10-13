@@ -27,7 +27,7 @@ python linkage_dedup.py data/dataset_a.csv --fields first_name:jw,last_name:jw,d
 python linkage_dedup.py --help
 ```
 
-The Python engine provides Jaro and Jaro–Winkler fuzzy comparisons, configurable blocking, field selection, and optional unsupervised EM estimation of Fellegi–Sunter probabilities. Default inferred fields exclude record identifiers such as `patient_id` and `mrn` (specify them explicitly if desired). An empty candidate set writes a header-only CSV. A blocked-out pair is **not** proof of nonidentity; blocking can miss true matches.
+The Python engine provides Jaro and Jaro–Winkler fuzzy comparisons, configurable blocking, field selection, and optional unsupervised EM estimation of Fellegi–Sunter probabilities. Default inferred fields exclude record identifiers such as `patient_id` and `mrn` (specify them explicitly if desired). An empty candidate set writes a header-only CSV. A blocked-out pair is **not** proof of nonidentity; blocking can miss true matches. Python CLI CSV exports neutralize potential spreadsheet-formula strings from input cells.
 
 For the sample data, the report lists candidate record pairs with scores and `match`, `possible_match`, or `non_match` classifications. These classes are heuristic and require external validation before record merging or clinical use.
 
@@ -49,7 +49,7 @@ The server exposes `GET /health`, `GET /metrics` (JSON, not Prometheus expositio
 
 ## Privacy and security
 
-Browser CSV processing makes no outgoing data requests. CSV report export escapes spreadsheet-formula-like values. The Python CLI reads local paths and can output sensitive matching data; handle these files according to your local privacy obligations. The audit service includes pattern-based detection of selected sensitive strings, but it cannot guarantee detection of all protected health information, HIPAA de-identification, or clinical compliance. The demonstration API supports optional bearer-token authentication through `API_TOKEN`; when configured, supply `Authorization: Bearer <token>` on every endpoint except `/health`. The CLI refuses to bind a non-loopback address without an API token, and Docker Compose publishes port 8000 only on localhost by default. Do not send identifiable patient data to this demonstration service or expose it without additional production safeguards.
+Browser CSV processing makes no outgoing data requests. CSV report export escapes spreadsheet-formula-like values. The Python CLI reads local paths and can output sensitive matching data; handle these files according to your local privacy obligations. The audit service includes pattern-based detection of selected sensitive strings, but it cannot guarantee detection of all protected health information, HIPAA de-identification, or clinical compliance. The demonstration API supports optional bearer-token authentication through `API_TOKEN`; when configured, supply `Authorization: Bearer <token>` on every endpoint except `/health`. The CLI refuses to bind a non-loopback address without an API token. Docker Compose requires `API_TOKEN` and publishes port 8000 only on localhost by default. Do not send identifiable patient data to this demonstration service or expose it without additional production safeguards.
 
 ## Development and testing
 

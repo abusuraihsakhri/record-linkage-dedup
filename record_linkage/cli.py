@@ -6,6 +6,14 @@ import sys
 from .linker import run_linkage, DEFAULT_BLOCKING_SPEC
 
 
+def _spreadsheet_safe(value):
+    """Neutralize formulas in untrusted CSV values before spreadsheet import."""
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="record-linkage-dedup",
@@ -84,7 +92,11 @@ def main(argv=None) -> int:
         return 1
 
     report = result["report"]
-    report.to_csv(args.output, index=False)
+    export = report.copy()
+    for col in export.columns:
+        if col in ("source_a", "source_b") or col.endswith(("_a", "_b")):
+            export[col] = export[col].map(_spreadsheet_safe)
+    export.to_csv(args.output, index=False)
 
     n_match = int((report["classification"] == "match").sum()) if not report.empty else 0
     n_possible = int((report["classification"] == "possible_match").sum()) if not report.empty else 0

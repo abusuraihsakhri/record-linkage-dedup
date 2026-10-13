@@ -7,7 +7,7 @@ services:
     environment:
       - AUDIT_SECRET_KEY=${AUDIT_SECRET_KEY:-}
       - MODEL_PROVIDER=mock
-      - API_TOKEN=${API_TOKEN:-}
+      - API_TOKEN=${API_TOKEN:?Set a random API_TOKEN in your environment before starting Docker Compose}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
