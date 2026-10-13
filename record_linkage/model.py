@@ -53,9 +53,17 @@ class FellegiSunterModel:
     def __init__(self, field_names: List[str], m_prob: np.ndarray, u_prob: np.ndarray, prior: float = 0.05):
         if len(field_names) != len(m_prob) or len(field_names) != len(u_prob):
             raise ValueError("field_names, m_prob, u_prob must have the same length")
+        m_array = np.asarray(m_prob, dtype=float)
+        u_array = np.asarray(u_prob, dtype=float)
+        if (not np.isfinite(m_array).all() or not np.isfinite(u_array).all()
+                or not np.isfinite(prior)
+                or np.any((m_array < 0) | (m_array > 1))
+                or np.any((u_array < 0) | (u_array > 1))
+                or not 0 <= prior <= 1):
+            raise ValueError("m, u and prior must be finite probabilities in [0, 1]")
         self.field_names = list(field_names)
-        self.m_prob = _clip(np.asarray(m_prob, dtype=float))
-        self.u_prob = _clip(np.asarray(u_prob, dtype=float))
+        self.m_prob = _clip(m_array)
+        self.u_prob = _clip(u_array)
         self.prior = float(np.clip(prior, EPS, 1.0 - EPS))
 
     @classmethod
@@ -96,7 +104,11 @@ class FellegiSunterModel:
 
         Returns a dict with 'iterations' and 'log_likelihood' history.
         """
+        if max_iter < 1:
+            raise ValueError("max_iter must be at least 1")
         A = np.asarray(agreement_matrix, dtype=float)
+        if A.ndim != 2 or not np.isfinite(A).all() or np.any((A < 0) | (A > 1)):
+            raise ValueError("agreement_matrix must be a finite two-dimensional matrix of values in [0, 1]")
         n_pairs, n_fields = A.shape
         if n_fields != len(self.field_names):
             raise ValueError("agreement_matrix column count does not match field_names")

@@ -1,176 +1,69 @@
 # Record Linkage Dedup
 
-> **Domain:** Clinical Decision Support & Biomedical Computing
+Probabilistic record linkage and candidate-duplicate identification for CSV data. The repository includes a browser application, a configurable Python pipeline, and a separate demonstration audit service.
 
-<div align="center">
+## Browser application
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12-3776AB.svg?logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688.svg?logo=fastapi&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)
-
-</div>
-
----
-
-## Overview
-
-Record Linkage Deduplicator identifies likely duplicate patient records across one or more datasets using the **Fellegi-Sunter (1969) probabilistic record linkage model**, with a Winkler-style EM step to estimate agreement/disagreement weights and Jaro-Winkler string similarity for fuzzy comparison of name fields.
-
----
-
-## Features
-
-- **Fellegi-Sunter probabilistic model** with m/u probability estimation
-- **Jaro-Winkler fuzzy string matching** for name fields
-- **Blocking** (birth year + first-name initial) to avoid O(n^2) comparisons
-- **EM algorithm** for automatic m/u calibration from data
-- **PHI outbound guard** to prevent sensitive data leakage
-- **HMAC-SHA256 tamper-evident audit trail**
-- **FastAPI REST API** for remote processing
-- **Prometheus metrics** endpoint
-
----
-
-## Installation
+Open `web/index.html` through a local HTTP server, or the GitHub Pages deployment when enabled:
 
 ```bash
-pip install -r requirements.txt
+python -m http.server 8080
+# Browse to http://localhost:8080/web/
 ```
 
----
+Choose one or two CSV files or load the sample dataset, select a name similarity threshold, and choose **Find candidate duplicates**. Review the scored candidate pairs and download the detailed CSV report. The browser application operates entirely in the tab: files and results are not uploaded to a server.
 
-## Usage
+The browser implementation supports `first_name`, `last_name`, and `dob` (ISO `YYYY-MM-DD`), with birth-year/first-initial blocking and fixed Fellegi–Sunter m/u probabilities of 0.9/0.1. It compares candidates both within and across supplied files. It does not perform EM estimation or support custom field selection. To limit browser resource usage it accepts at most 20,000 rows, 5 MB per file, and 100,000 candidate pairs; larger or more specialized tasks should use the Python CLI.
 
-### Command Line Interface
+## Python command line
 
-**Deduplicate a single dataset:**
+Use Python 3.10–3.12:
+
 ```bash
-python linkage_dedup.py data/dataset_a.csv
-```
-
-**Link two datasets:**
-```bash
-python linkage_dedup.py data/dataset_a.csv data/dataset_b.csv --output report.csv
-```
-
-**Use EM to estimate m/u probabilities:**
-```bash
+python -m pip install -r requirements.txt
+python linkage_dedup.py data/dataset_a.csv data/dataset_b.csv --output linkage_report.csv
 python linkage_dedup.py data/dataset_a.csv --em
-```
-
-**Run with custom field specs:**
-```bash
 python linkage_dedup.py data/dataset_a.csv --fields first_name:jw,last_name:jw,dob:near
+python linkage_dedup.py --help
 ```
 
-### Enterprise CLI (agents framework)
+The Python engine provides Jaro and Jaro–Winkler fuzzy comparisons, configurable blocking, field selection, and optional unsupervised EM estimation of Fellegi–Sunter probabilities. Default inferred fields exclude record identifiers such as `patient_id` and `mrn` (specify them explicitly if desired). An empty candidate set writes a header-only CSV. A blocked-out pair is **not** proof of nonidentity; blocking can miss true matches. Python CLI CSV exports neutralize potential spreadsheet-formula strings from input cells.
+
+For the sample data, the report lists candidate record pairs with scores and `match`, `possible_match`, or `non_match` classifications. These classes are heuristic and require external validation before record merging or clinical use.
+
+### CSV input
+
+The browser requires columns `first_name,last_name,dob` with DOB in `YYYY-MM-DD` format. The Python CLI can infer common alternatives (or accept explicit `--fields` and `--blocking`). Records from all input files are combined; both within-file and cross-file pairs may be considered. Missing blocking-key components are skipped.
+
+## Separate audit demonstration
+
+An auxiliary service in `agents/` implements numeric rule evaluation and a mock supervisory query workflow; it is **not** the record-linkage engine. To try it locally:
 
 ```bash
-# Run audit
 python cli.py audit --task-id TASK-001 --primary 28.5
-
-# Batch process
-python cli.py batch -i data/dataset_a.csv -o results.csv
-
-# Launch API server
-python cli.py serve --host 127.0.0.1 --port 8000
-
-# Verify audit trail
 python cli.py verify-audit
+python cli.py serve --host 127.0.0.1 --port 8000
 ```
 
-### REST API
+The server exposes `GET /health`, `GET /metrics` (JSON, not Prometheus exposition), `POST /api/audit`, `POST /api/chat`, and `GET /api/audit/logs`. The audit log uses per-process HMAC-SHA256 chain verification. It is in-memory and is **not** durable across restarts. Set `AUDIT_SECRET_KEY` to a high-entropy value to control the signing key. The mock chat endpoint does not connect to an external language model.
+
+## Privacy and security
+
+Browser CSV processing makes no outgoing data requests. CSV report export escapes spreadsheet-formula-like values. The Python CLI reads local paths and can output sensitive matching data; handle these files according to your local privacy obligations. The audit service includes pattern-based detection of selected sensitive strings, but it cannot guarantee detection of all protected health information, HIPAA de-identification, or clinical compliance. The demonstration API supports optional bearer-token authentication through `API_TOKEN`; when configured, supply `Authorization: Bearer <token>` on every endpoint except `/health`. The CLI refuses to bind a non-loopback address without an API token. Docker Compose requires `API_TOKEN` and publishes port 8000 only on localhost by default. Do not send identifiable patient data to this demonstration service or expose it without additional production safeguards.
+
+## Development and testing
 
 ```bash
-python cli.py serve
+python -m pip install -r requirements.txt
+python -m pytest -q
+python -m compileall -q agents record_linkage cli.py linkage_dedup.py simulator.py enrichment.py
+node --test web/*.test.mjs
 ```
 
-Endpoints:
-- `GET /health` - Health check
-- `GET /metrics` - Prometheus metrics
-- `POST /api/audit` - Submit task for evaluation
-- `POST /api/chat` - Supervisory chat
-- `GET /api/audit/logs` - Audit trail
+The browser application uses native JavaScript modules, HTML, and CSS without framework dependencies. The Python CLI requires NumPy and pandas; the auxiliary API uses FastAPI and Pydantic. The browser build targets current versions of Chromium, Firefox, and Safari, though cross-browser manual testing is still recommended.
 
----
+GitHub Actions runs Python tests on 3.10, 3.11, and 3.12 and tests the browser matching engine with Node. A separate workflow deploys the `web/` directory to GitHub Pages when Pages is configured with GitHub Actions as the build source.
 
-## Input Data Schema
+## License
 
-CSV files with the following columns:
-
-| Field | Description | Requirement |
-|:------|:------------|:------------|
-| `patient_id` | Unique record identifier | Required |
-| `first_name` | Patient first name | Optional |
-| `last_name` | Patient last name | Optional |
-| `dob` | Date of birth (YYYY-MM-DD) | Optional |
-
----
-
-## Testing
-
-```bash
-pytest -v
-```
-
-Run simulation benchmark:
-
-```bash
-python simulator.py 1000
-```
-
----
-
-## Security
-
-- **Zero-PHI Outbound Guard:** AST and regex inspection blocking SSNs, MRNs, phone numbers
-- **HMAC-SHA256 Audit Trail:** Chained, cryptographically signed logs
-- **Path traversal protection** on file operations
-
-Set a strong audit secret key via environment variable:
-```bash
-export AUDIT_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
-```
-
----
-
-## Docker Deployment
-
-```bash
-docker-compose up --build
-```
-
-Or manually:
-
-```bash
-docker build -t record-linkage-dedup .
-docker run -p 8000:8000 -e AUDIT_SECRET_KEY=your-secret-key record-linkage-dedup
-```
-
----
-
-## Project Structure
-
-```
-record-linkage-dedup/
-├── record_linkage/      # Core linkage package
-│   ├── similarity.py    # Jaro/Jaro-Winkler
-│   ├── model.py         # Fellegi-Sunter model
-│   ├── blocking.py      # Blocking key construction
-│   ├── linker.py        # Pipeline orchestration
-│   └── cli.py           # Linkage CLI
-├── agents/              # Enterprise agent framework
-│   ├── base.py          # PHI guard, audit trail
-│   ├── models.py        # Pydantic schemas
-│   ├── supervisor.py    # Orchestrator
-│   ├── workers.py       # Specialized agents
-│   └── api.py           # FastAPI endpoints
-├── tests/               # Pytest test suite
-├── data/                # Sample datasets
-├── cli.py               # Enterprise CLI entry point
-├── linkage_dedup.py     # Linkage CLI entry point
-├── enrichment.py        # Feature enrichment suite
-├── simulator.py         # Load testing simulator
-└── requirements.txt     # Python dependencies
-```
+No license file is currently included in the repository. Consult the repository owner for reuse permissions.
