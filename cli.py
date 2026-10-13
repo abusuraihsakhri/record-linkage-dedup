@@ -28,6 +28,15 @@ def _safe_resolve_path(path_str: str) -> Path:
     return path
 
 
+def _parse_boolean(value: str) -> bool:
+    value = str(value or "").strip().lower()
+    if value in ("", "0", "false", "no", "n"):
+        return False
+    if value in ("1", "true", "yes", "y"):
+        return True
+    raise ValueError(f"Invalid boolean for is_critical_flag: {value!r}")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="record-linkage-dedup", description="Record Linkage Dedup")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -112,7 +121,7 @@ def main(argv=None):
                 primary_metric=float(r.get("primary_metric", 15.0)),
                 secondary_metric=float(r.get("secondary_metric", 5.0)),
                 status_descriptor=r.get("status_descriptor", "NOMINAL"),
-                is_critical_flag=bool(r.get("is_critical_flag", False)),
+                is_critical_flag=_parse_boolean(r.get("is_critical_flag", "")),
             )
             dossier = supervisor.process_task(payload)
             row_dict = dict(r)

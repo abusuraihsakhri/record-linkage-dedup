@@ -21,9 +21,6 @@ DEFAULT_FIELD_CANDIDATES = {
     "dob": "near",
     "date_of_birth": "near",
     "birth_date": "near",
-    "ssn": "near",
-    "patient_id": "near",
-    "mrn": "near",
 }
 
 DEFAULT_BLOCKING_SPEC = "dob:year,first_name:initial"
@@ -128,7 +125,10 @@ def generate_candidate_pairs(df: pd.DataFrame, blocking_fields: List[Tuple[str, 
     """
     keys = build_blocking_keys(df, blocking_fields)
     pairs = []
-    for _, group in df.groupby(keys).groups.items():
+    for key, group in df.groupby(keys).groups.items():
+        # Missing blocking components should not form a giant all-missing block.
+        if any(part == "" for part in key):
+            continue
         indices = list(group)
         if len(indices) < 2:
             continue
@@ -179,6 +179,12 @@ def run_linkage(paths: List[str], field_specs_raw: Optional[str] = None,
     """
     df, field_specs, lookup = load_and_normalize(paths, field_specs_raw, jw_threshold, near_threshold)
     blocking_fields = parse_blocking_spec(blocking_spec_raw, lookup)
+    # A blocking column need not also be a comparison field.
+    compared_columns = {fs.column for fs in field_specs}
+    for column, transform in blocking_fields:
+        if column not in compared_columns:
+            normalizer = normalize_dob if transform == "year" else normalize_string
+            df[column] = df[column].apply(normalizer)
 
     pairs = generate_candidate_pairs(df, blocking_fields)
 
@@ -203,6 +209,9 @@ def run_linkage(paths: List[str], field_specs_raw: Optional[str] = None,
     if resolved_lower < min_score:
         resolved_lower = min_score
 
+    if not np.isfinite(resolved_upper) or not np.isfinite(resolved_lower) or resolved_lower > resolved_upper:
+        raise ValueError("Score thresholds must be finite and lower <= upper")
+
     labels = FellegiSunterModel.classify(scores, resolved_upper, resolved_lower) if len(pairs) else []
 
     report_rows = []
@@ -222,7 +231,10 @@ def run_linkage(paths: List[str], field_specs_raw: Optional[str] = None,
             row[f"{fs.name}_agree"] = bool(agreement[i, col_idx])
         report_rows.append(row)
 
-    report_df = pd.DataFrame(report_rows)
+    report_columns = ["row_a", "row_b", "source_a", "source_b", "score", "classification"]
+    for fs in field_specs:
+        report_columns.extend([f"{fs.name}_a", f"{fs.name}_b", f"{fs.name}_similarity", f"{fs.name}_agree"])
+    report_df = pd.DataFrame(report_rows, columns=report_columns)
     if not report_df.empty:
         report_df = report_df.sort_values("score", ascending=False).reset_index(drop=True)
 
