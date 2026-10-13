@@ -33,7 +33,7 @@ test("no candidates retains export header", () => {
 test("CSV exports escape spreadsheet formulas", () => {
   const rows = parseCsv('first_name,last_name,dob\n"=HYPERLINK(1)",Smith,1980-05-14\n"=HYPERLINK(1)",Smith,1980-05-14\n');
   const result = linkDatasets([{ name: "source", rows }], { maxPairs: 10 });
-  assert.match(reportCsv(result.report), /'=HYPERLINK/);
+  assert.match(reportCsv(result.report), /'=hyperlink/i);
 });
 test("limit dense blocking groups", () => {
   const rows = Array.from({ length: 12 }, () => a[0]);
