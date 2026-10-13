@@ -139,6 +139,9 @@ def main(argv=None):
         return 0
 
     if args.command == "serve":
+        if args.host not in ("127.0.0.1", "::1", "localhost") and not os.getenv("API_TOKEN"):
+            print("Refusing non-loopback bind without API_TOKEN. Set API_TOKEN first.", file=sys.stderr)
+            return 2
         import uvicorn
         from agents.api import app
         print(f"Starting Record Linkage Dedup API server on http://{args.host}:{args.port}")

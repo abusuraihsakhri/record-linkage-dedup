@@ -49,7 +49,7 @@ The server exposes `GET /health`, `GET /metrics` (JSON, not Prometheus expositio
 
 ## Privacy and security
 
-Browser CSV processing makes no outgoing data requests. CSV report export escapes spreadsheet-formula-like values. The Python CLI reads local paths and can output sensitive matching data; handle these files according to your local privacy obligations. The audit service includes pattern-based detection of selected sensitive strings, but it cannot guarantee detection of all protected health information, HIPAA de-identification, or clinical compliance. The demonstration API does not implement authentication: **do not expose it on a public network or send identifiable patient data to it**.
+Browser CSV processing makes no outgoing data requests. CSV report export escapes spreadsheet-formula-like values. The Python CLI reads local paths and can output sensitive matching data; handle these files according to your local privacy obligations. The audit service includes pattern-based detection of selected sensitive strings, but it cannot guarantee detection of all protected health information, HIPAA de-identification, or clinical compliance. The demonstration API supports optional bearer-token authentication through `API_TOKEN`; when configured, supply `Authorization: Bearer <token>` on every endpoint except `/health`. The CLI refuses to bind a non-loopback address without an API token, and Docker Compose publishes port 8000 only on localhost by default. Do not send identifiable patient data to this demonstration service or expose it without additional production safeguards.
 
 ## Development and testing
 
